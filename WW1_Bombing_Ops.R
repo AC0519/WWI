@@ -12,6 +12,16 @@ colnames(df) <- tolower(colnames(df))
   
 df$msndate <- mdy(df$msndate)
 
+a <- year(df$msndate)
+b <- month(df$msndate)
+df$year_month <- paste(a, b, sep = "-")
+df$year_month <- ymd(df$year_month, truncated = 1)
+
+df$year <- paste(a, 01, 01, sep = "-")
+df$year <- ymd(df$year) 
+
+df$numberofplanesattacking <- as.integer(df$numberofplanesattacking)
+
 
 ####I noticed there are only 4 countries represented and thought this would be better as a factor
 df %>% 
@@ -59,7 +69,7 @@ df.takeoff %>%
   group_by(takeofftime) %>% 
   summarize(n())
 
-#After filtering the data I see that the latest take off times in the date time group were 1800 in summer #months.  Therefore I think it is reasonable to set all of the data that is not NA or Night to Day (Yes, I # # saw the two values marked as evening and to me this is still daylight).
+#After filtering the data I see that the latest take off times in the date time group were 1800 in summer #months.  Therefore I think it is reasonable to set all of the data that is not NA or Night to Day (Yes, I #saw the two values marked as evening and to me this is still daylight).
 dayOrNight <- function(time){
           if(is.na(time)){
             return(time)
@@ -81,15 +91,49 @@ df %>%
 df$takeofftime <- as.factor(df$takeofftime)
 
 #I am curious if country can tell us if an attack is more likely to prove day or night to clean up the NAs
-##########            Still needs work ############
-ggplot(df)+
-  geom_point(aes(x = takeofftime, y = country))
 
-takeoff.NA <- df %>% 
-  filter(is.na(takeofftime))
+df %>% 
+  group_by(takeofftime, country) %>% 
+  summarize(total = n()) %>% 
+  ggplot()+
+  geom_point(aes(x = takeofftime, y = total, color = country))+
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+#who conducted the most night attacks?
+df %>% 
+  group_by(country, takeofftime) %>% 
+  summarize(total = n()) %>% 
+  arrange(country, desc(total))
 
 
 ####EDA----
+
+#What were the total number of planes used by each country
+ggplot(df)+
+  geom_col(aes(country, numberofplanesattacking))
+
+#what was the total number of missions by country
+ggplot(df)+
+  geom_bar(aes(country))
+
+df %>% 
+  group_by(country) %>% 
+  summarize(total = n()) %>% 
+  arrange(desc(total))
+
+#what was the target country by attacker
+df %>% 
+  group_by(country, tgtcountry) %>% 
+  summarize(total = n()) %>% 
+  arrange(desc(total))
+
+#airframe by country
+df %>% 
+  group_by(country, mds) %>% 
+  summarize(total = n()) %>% 
+  arrange(desc(total)) %>% 
+  ggplot()+
+    geom_col(aes(country, total, fill = mds), position = "dodge")
 
 #What was the most common platform for night attacks?
 
@@ -112,24 +156,22 @@ df %>%
 
 airship <- df %>% filter(mds == "AIRSHIP")
 
+pal <- colorNumeric(palette = c("green", "red", "blue", "black"), domain = airship$year)
+
 airship_attack_map <- leaflet() %>% 
                       addTiles() %>% 
                         addCircleMarkers( data = airship,
-                                          color = "black",
+                                          color = ~pal(year),
                                           radius = 2,
                                           popup = ~paste("Date: ", msndate, "<br/>",
                                                          "Attack Location: ", tgtlocation, "<br/>",
-                                                         "Target: ", tgttype, "<br/>")
-                                          )
+                                                         "Target: ", tgttype, "<br/>"),
+                                          group = ~pal(year)
+                                          ) 
 airship_attack_map
 
 
 #what was the total frequency of attacks by month over the course of the war?
-a <- year(df$msndate)
-b <- month(df$msndate)
-df$year_month <- paste(a, b, sep = "-")
-df$year_month <- ymd(df$year_month, truncated = 1)
-
 df %>% 
   group_by(year_month, country) %>% 
   summarize(total = n()) %>% 
@@ -162,16 +204,33 @@ ggplot(us_oct_18)+
   geom_bar(aes(tgtcountry))+
   theme(axis.text.x = element_text(angle = 90, hjust = 1))
 
+usOct1918_map <- leaflet() %>% 
+  addTiles() %>% 
+  addCircleMarkers( data = us_oct_18,
+                    color = "black",
+                    radius = 2,
+                    popup = ~paste("Date: ", msndate, "<br/>",
+                                   "Attack Location: ", tgtlocation, "<br/>",
+                                   "Target: ", tgttype, "<br/>")
+  )
+usOct1918_map
+
 #what platforms did the US fly at the height of operations
 us_oct_18 %>% 
   group_by(mds) %>% 
   summarize(total = n()) %>% 
   arrange(desc(total))
+
+
+
+#########
+Argonne_Meuse <- df %>% 
+                  filter(operation == "ARGONNE-MEUSE")  
+
+Argonne_Meuse$numberofplanesattacking <- as.numeric(Argonne_Meuse$numberofplanesattacking)  
   
-  
-  
-  
-  
-  
+Argonne_tf_US <- df %>%
+                filter(msndate >= "1918-09-26" & country == "USA")
+
   
   
